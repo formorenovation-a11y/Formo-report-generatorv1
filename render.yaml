@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: formo-report-generator
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: ANTHROPIC_API_KEY
+        sync: false   # You set this manually in Render dashboard
+    healthCheckPath: /
+    autoDeploy: true
