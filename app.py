@@ -67,7 +67,7 @@ def ai_describe(img_path, num):
     except Exception:
         return {"section": "General", "title": "Photo " + str(num), "description": "Renovation work completed.", "tags": []}
 
-LOGO = '<svg width="72" height="72" viewBox="0 0 80 80" fill="none"><polygon points="40,5 75,30 75,72 5,72 5,30" stroke="#C9A96E" stroke-width="3" fill="rgba(25,24,22,0.4)" stroke-linejoin="round"/><polyline points="18,30 18,62 62,62 62,30" stroke="#C9A96E" stroke-width="2.5" fill="none" stroke-linejoin="round"/><polyline points="30,62 30,42 50,42" stroke="#C9A96E" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="30" y1="50" x2="46" y2="50" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/></svg>'
+LOGO = 'https://i.ibb.co/LXMxPRYx/Chat-GPT-Image-2-may-2026-12-02-45-a-m.png'
 
 def build_html(meta, cover_b64, photos, include_descriptions):
     address = meta.get("address", "")
