@@ -50,7 +50,7 @@ def ai_describe(img_path, num):
         b64 = base64.b64encode(f.read()).decode()
     try:
         msg = client.messages.create(
-            model="claude-sonnet-4-20250514", max_tokens=180,
+            model="claude-sonnet-4-6", max_tokens=180,
             messages=[{"role": "user", "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
                 {"type": "text", "text":
