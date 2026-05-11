@@ -128,6 +128,9 @@ footer .f-right{font-size:11px;color:var(--mt);text-align:right;}
     <div class="s-icon">✅</div>
     <div class="s-title">Report Ready</div>
     <div class="s-sub" id="successSub"></div>
+    <button id="dlBtn" onclick="" style="display:none;margin-top:16px;width:100%;padding:14px;background:#C9A96E;color:#191816;border:none;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;">
+      ⬇ Download PDF
+    </button>
   </div>
 
   <div class="error-wrap" id="errorWrap"></div>
@@ -206,38 +209,41 @@ async function generate() {
   btn.disabled = true;
   hideAll();
   document.getElementById('progressWrap').style.display = 'block';
-  setProgress('Uploading PDF…', 10, 'Sending to server');
-
+  setProgress('Uploading PDF...', 10, 'Sending to server');
   const formData = new FormData();
   formData.append('pdf', selectedFile);
   formData.append('mode', selectedMode);
-
   try {
-    setProgress('Processing…', 40, 'Extracting photos and building report');
+    setProgress('Processing...', 40, 'Extracting photos and building report');
     const resp = await fetch('/generate', { method: 'POST', body: formData });
-
     if (!resp.ok) {
       let msg = 'Server error';
       try { const e = await resp.json(); msg = e.error || msg; } catch(_) {}
       throw new Error(msg);
     }
-
     setProgress('Done!', 100, '');
-
-    // Get PDF as array buffer and open in new tab (works on iOS Safari)
-    const buffer = await resp.arrayBuffer();
-    const blob = new Blob([buffer], { type: 'application/pdf' });
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'Formo_Report.pdf';
+    const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-
     document.getElementById('progressWrap').style.display = 'none';
     document.getElementById('successWrap').style.display = 'block';
-    document.getElementById('successSub').textContent = 'Report opened in new tab — tap Share → Save to Files';
-
+    document.getElementById('successSub').textContent = filename;
+    const dlBtn = document.getElementById('dlBtn');
+    dlBtn.style.display = 'block';
+    dlBtn.onclick = function() {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
   } catch (err) {
     document.getElementById('progressWrap').style.display = 'none';
     document.getElementById('errorWrap').style.display = 'block';
-    document.getElementById('errorWrap').textContent = '⚠ ' + err.message;
+    document.getElementById('errorWrap').textContent = 'Warning: ' + err.message;
   }
   btn.disabled = false;
 }
@@ -248,13 +254,7 @@ dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
 dz.addEventListener('drop', e => {
   e.preventDefault();
   dz.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file && file.name.endsWith('.pdf')) {
-    selectedFile = file;
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileSelected').style.display = 'block';
-    document.getElementById('genBtn').disabled = false;
-    hideAll();
+  const file = e.dataTransfer.fi
   }
 });
 </script>
