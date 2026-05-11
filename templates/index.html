@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formo Renovation — Report Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g:#C9A96E;--gl:#E2C98A;--gd:#9A7840;--b:#191816;--b2:#252220;--b3:#2E2A26;--c:#F8F4EF;--c2:#C8BFB0;--mt:#7A7060;--bd:rgba(201,169,110,0.16);--serif:'Cormorant Garamond',Georgia,serif;--sans:'Barlow',sans-serif;--cond:'Barlow Condensed',sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--b);color:var(--c);font-family:var(--sans);font-weight:300;min-height:100vh;display:flex;flex-direction:column;}
+header{background:var(--b2);border-bottom:1px solid var(--bd);padding:16px 32px;display:flex;align-items:center;gap:14px;}
+.brand-text .name{font-family:var(--cond);font-weight:700;font-size:18px;letter-spacing:.26em;color:var(--c);}
+.brand-text .sub{font-size:9px;letter-spacing:.38em;color:var(--g);text-transform:uppercase;}
+.header-badge{margin-left:auto;font-size:9px;letter-spacing:.22em;color:var(--mt);text-transform:uppercase;padding:4px 12px;border:1px solid var(--bd);border-radius:1px;}
+.hero{padding:64px 20px 48px;text-align:center;}
+.hero h1{font-family:var(--serif);font-size:clamp(36px,6vw,56px);font-weight:300;color:var(--c);line-height:1.1;}
+.hero h1 em{font-style:italic;color:var(--gl);}
+.hero p{font-size:14px;color:var(--c2);margin-top:14px;line-height:1.7;max-width:480px;margin-inline:auto;}
+.main-card{max-width:580px;margin:0 auto;padding:0 20px 80px;width:100%;}
+.dropzone{border:2px dashed rgba(201,169,110,0.3);border-radius:4px;padding:52px 24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,0.02);position:relative;}
+.dropzone:hover,.dropzone.drag-over{border-color:var(--g);background:rgba(201,169,110,0.04);}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:42px;margin-bottom:14px;display:block;}
+.drop-title{font-size:16px;font-weight:500;color:var(--c);margin-bottom:6px;}
+.drop-sub{font-size:12px;color:var(--mt);}
+.file-selected{margin-top:14px;padding:10px 14px;background:rgba(201,169,110,0.08);border:1px solid rgba(201,169,110,0.25);border-radius:2px;font-size:13px;color:var(--gl);display:none;text-align:left;word-break:break-all;}
+.mode-section{margin-top:24px;}
+.mode-label{font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--mt);margin-bottom:10px;display:block;}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.mode-btn{padding:16px 14px;border:1px solid var(--bd);border-radius:2px;background:var(--b3);cursor:pointer;text-align:left;transition:all .15s;color:var(--c2);}
+.mode-btn:hover{border-color:var(--gd);}
+.mode-btn.active{border-color:var(--g);background:rgba(201,169,110,0.06);}
+.mode-btn .m-icon{font-size:20px;margin-bottom:8px;display:block;}
+.mode-btn .m-title{font-family:var(--cond);font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c);display:block;margin-bottom:4px;}
+.mode-btn.active .m-title{color:var(--gl);}
+.mode-btn .m-desc{font-size:11px;color:var(--mt);line-height:1.5;}
+.gen-btn{display:block;width:100%;margin-top:20px;padding:16px;background:var(--g);color:var(--b);border:none;border-radius:2px;font-family:var(--cond);font-weight:700;font-size:15px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:all .15s;}
+.gen-btn:hover{background:var(--gl);}
+.gen-btn:disabled{background:var(--b3);color:var(--mt);cursor:not-allowed;}
+.progress-wrap{display:none;margin-top:20px;}
+.progress-label{font-size:11px;color:var(--mt);letter-spacing:.08em;margin-bottom:8px;display:flex;justify-content:space-between;}
+.progress-bar-bg{height:3px;background:rgba(255,255,255,0.07);border-radius:2px;}
+.progress-bar-fill{height:100%;background:var(--g);border-radius:2px;transition:width .4s ease;width:0%;}
+.progress-sub{font-size:11px;color:var(--mt);margin-top:8px;}
+.success-wrap{display:none;margin-top:20px;padding:22px 20px;background:var(--b2);border:1px solid rgba(201,169,110,0.22);border-radius:3px;text-align:center;}
+.success-wrap .s-icon{font-size:36px;margin-bottom:10px;}
+.success-wrap .s-title{font-family:var(--cond);font-size:18px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g);margin-bottom:6px;}
+.success-wrap .s-sub{font-size:12px;color:var(--c2);}
+.error-wrap{display:none;margin-top:14px;padding:12px 14px;background:rgba(200,80,80,0.08);border:1px solid rgba(200,80,80,0.25);border-radius:2px;font-size:13px;color:#E09090;}
+.how-section{margin-top:40px;padding-top:28px;border-top:1px solid var(--bd);}
+.how-title{font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--mt);margin-bottom:18px;}
+.step{display:flex;gap:14px;margin-bottom:14px;align-items:flex-start;}
+.step-num{width:22px;height:22px;border-radius:50%;border:1px solid var(--gd);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--g);font-family:var(--cond);font-size:11px;font-weight:700;}
+.step-text .t{font-size:13px;font-weight:500;color:var(--c);line-height:1.4;}
+.step-text .s{font-size:11px;color:var(--mt);}
+footer{margin-top:auto;background:var(--b2);border-top:1px solid var(--bd);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+footer .f-brand{font-family:var(--cond);font-size:14px;font-weight:700;letter-spacing:.22em;color:var(--c);}
+footer .f-brand span{color:var(--g);}
+footer .f-sub{font-size:9px;letter-spacing:.2em;color:var(--mt);text-transform:uppercase;margin-top:2px;}
+footer .f-right{font-size:11px;color:var(--mt);text-align:right;}
+@media(max-width:480px){.mode-grid{grid-template-columns:1fr;}header{padding:12px 16px;}.hero{padding:40px 16px 32px;}footer{flex-direction:column;}footer .f-right{text-align:left;}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.pulsing{animation:pulse 1.5s ease infinite;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="32" height="32" viewBox="0 0 80 80" fill="none">
+      <polygon points="40,5 75,30 75,72 5,72 5,30" stroke="#C9A96E" stroke-width="3.5" fill="rgba(25,24,22,0.4)" stroke-linejoin="round"/>
+      <polyline points="18,30 18,62 62,62 62,30" stroke="#C9A96E" stroke-width="3" fill="none" stroke-linejoin="round"/>
+      <polyline points="30,62 30,42 50,42" stroke="#C9A96E" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="30" y1="50" x2="46" y2="50" stroke="#C9A96E" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div class="brand-text">
+    <div class="name">FORMO</div>
+    <div class="sub">Renovation</div>
+  </div>
+  <div class="header-badge">Report Generator</div>
+</header>
+
+<div class="hero">
+  <h1>Before &amp; After<br><em>Report Generator</em></h1>
+  <p>Upload any CompanyCam PDF. Get a branded, professional report — ready to send to your client.</p>
+</div>
+
+<div class="main-card">
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" accept=".pdf" id="pdfInput" onchange="handleFile(this)">
+    <span class="drop-icon">📋</span>
+    <div class="drop-title">Tap or drop your CompanyCam PDF</div>
+    <div class="drop-sub">Before &amp; After report — any project</div>
+  </div>
+  <div class="file-selected" id="fileSelected">📄 <span id="fileName"></span></div>
+
+  <div class="mode-section">
+    <span class="mode-label">Report type</span>
+    <div class="mode-grid">
+      <button class="mode-btn active" id="btnClient" onclick="setMode('client')">
+        <span class="m-icon">📤</span>
+        <span class="m-title">Client Version</span>
+        <span class="m-desc">Photos + titles only. Clean, professional. Ready to send.</span>
+      </button>
+      <button class="mode-btn" id="btnInternal" onclick="setMode('internal')">
+        <span class="m-icon">🤖</span>
+        <span class="m-title">With Descriptions</span>
+        <span class="m-desc">AI writes 2-line English caption for every photo.</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="gen-btn" id="genBtn" onclick="generate()" disabled>Generate Report →</button>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressLabel" class="pulsing">Processing PDF…</span>
+      <span id="progressPct"></span>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-sub" id="progressSub"></div>
+  </div>
+
+  <div class="success-wrap" id="successWrap">
+    <div class="s-icon">✅</div>
+    <div class="s-title">Report Ready</div>
+    <div class="s-sub" id="successSub"></div>
+  </div>
+
+  <div class="error-wrap" id="errorWrap"></div>
+
+  <div class="how-section">
+    <div class="how-title">How it works</div>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <div class="t">Upload your CompanyCam PDF</div>
+        <div class="s">Any Before &amp; After report exported from CompanyCam</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <div class="t">Choose report type</div>
+        <div class="s">Client version (clean) or internal with AI descriptions</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <div class="t">Download your branded PDF</div>
+        <div class="s">Formo dark theme, gold accents, photos organized by work area</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div>
+    <div class="f-brand">FORMO <span>RENOVATION</span></div>
+    <div class="f-sub">Built on Quality · Driven by Integrity</div>
+  </div>
+  <div class="f-right">Dan Lares · Formo Renovation</div>
+</footer>
+
+<script>
+let selectedFile = null;
+let selectedMode = 'client';
+
+function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSelected').style.display = 'block';
+  document.getElementById('genBtn').disabled = false;
+  hideAll();
+}
+
+function setMode(mode) {
+  selectedMode = mode;
+  document.getElementById('btnClient').classList.toggle('active', mode === 'client');
+  document.getElementById('btnInternal').classList.toggle('active', mode === 'internal');
+}
+
+function hideAll() {
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('successWrap').style.display = 'none';
+  document.getElementById('errorWrap').style.display = 'none';
+}
+
+function setProgress(label, pct, sub) {
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressPct').textContent = pct ? pct + '%' : '';
+  document.getElementById('progressFill').style.width = (pct || 0) + '%';
+  document.getElementById('progressSub').textContent = sub || '';
+}
+
+async function generate() {
+  if (!selectedFile) return;
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  hideAll();
+  document.getElementById('progressWrap').style.display = 'block';
+  setProgress('Uploading PDF…', 10, 'Sending to server');
+  const formData = new FormData();
+  formData.append('pdf', selectedFile);
+  formData.append('mode', selectedMode);
+  try {
+    setProgress('Processing…', 30, 'Extracting photos from PDF');
+    const resp = await fetch('/generate', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Server error');
+    }
+    setProgress('Generating PDF…', 80, 'Building branded report');
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'Formo_Report.pdf';
+    setProgress('Done!', 100, '');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('successWrap').style.display = 'block';
+    document.getElementById('successSub').textContent = filename + ' — downloading now';
+  } catch (err) {
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('errorWrap').style.display = 'block';
+    document.getElementById('errorWrap').textContent = '⚠ ' + err.message;
+  }
+  btn.disabled = false;
+}
+
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.pdf')) {
+    selectedFile = file;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSelected').style.display = 'block';
+    document.getElementById('genBtn').disabled = false;
+    hideAll();
+  }
+});
+</script>
+</body>
+</html>
