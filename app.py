@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, send_file, render_template
 from werkzeug.utils import secure_filename
 
 app = Flask(**name**)
-app.config[“MAX_CONTENT_LENGTH”] = 100 * 1024 * 1024
+app.config["MAX_CONTENT_LENGHT"} = 100 * 1024 * 1024
 
 ANTHROPIC_KEY = os.environ.get(“ANTHROPIC_API_KEY”, “”)
 
