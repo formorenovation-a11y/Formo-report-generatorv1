@@ -207,29 +207,33 @@ async function generate() {
   hideAll();
   document.getElementById('progressWrap').style.display = 'block';
   setProgress('Uploading PDF…', 10, 'Sending to server');
+
   const formData = new FormData();
   formData.append('pdf', selectedFile);
   formData.append('mode', selectedMode);
+
   try {
-    setProgress('Processing…', 30, 'Extracting photos from PDF');
+    setProgress('Processing…', 40, 'Extracting photos and building report');
     const resp = await fetch('/generate', { method: 'POST', body: formData });
+
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.error || 'Server error');
+      let msg = 'Server error';
+      try { const e = await resp.json(); msg = e.error || msg; } catch(_) {}
+      throw new Error(msg);
     }
-    setProgress('Generating PDF…', 80, 'Building branded report');
-    const blob = await resp.blob();
-    const disposition = resp.headers.get('Content-Disposition') || '';
-    const match = disposition.match(/filename="?([^"]+)"?/);
-    const filename = match ? match[1] : 'Formo_Report.pdf';
+
     setProgress('Done!', 100, '');
+
+    // Get PDF as array buffer and open in new tab (works on iOS Safari)
+    const buffer = await resp.arrayBuffer();
+    const blob = new Blob([buffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    window.open(url, '_blank');
+
     document.getElementById('progressWrap').style.display = 'none';
     document.getElementById('successWrap').style.display = 'block';
-    document.getElementById('successSub').textContent = filename + ' — downloading now';
+    document.getElementById('successSub').textContent = 'Report opened in new tab — tap Share → Save to Files';
+
   } catch (err) {
     document.getElementById('progressWrap').style.display = 'none';
     document.getElementById('errorWrap').style.display = 'block';
