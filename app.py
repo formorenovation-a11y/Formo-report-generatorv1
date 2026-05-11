@@ -1,251 +1,525 @@
-import os, base64, subprocess, tempfile, re
+import os, base64, subprocess, tempfile, re, json, textwrap
 from flask import Flask, request, jsonify, send_file, render_template
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+app = Flask(**name**)
+app.config[“MAX_CONTENT_LENGTH”] = 100 * 1024 * 1024
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_KEY = os.environ.get(“ANTHROPIC_API_KEY”, “”)
+
+# ── Image extraction ───────────────────────────────────────────────────────────
 
 def extract_images(pdf_path, out_dir):
-    prefix = os.path.join(out_dir, "img")
-    subprocess.run(["pdfimages", "-j", pdf_path, prefix], check=True, capture_output=True)
-    imgs = sorted(
-        [os.path.join(out_dir, f) for f in os.listdir(out_dir)
-         if re.match(r"img-\d+\.jpe?g$", f, re.IGNORECASE)],
-        key=lambda p: int(re.search(r"(\d+)", os.path.basename(p)).group(1))
-    )
-    return imgs
+prefix = os.path.join(out_dir, “img”)
+subprocess.run([“pdfimages”, “-j”, pdf_path, prefix],
+check=True, capture_output=True)
+imgs = sorted(
+[os.path.join(out_dir, f) for f in os.listdir(out_dir)
+if re.match(r”img-\d+.jpe?g$”, f, re.IGNORECASE)],
+key=lambda p: int(re.search(r”(\d+)”, os.path.basename(p)).group(1))
+)
+return imgs
 
 def extract_meta(pdf_path):
-    try:
-        result = subprocess.run(["pdftotext", "-layout", pdf_path, "-"],
-                                capture_output=True, text=True, check=True)
-        text = result.stdout
-    except Exception:
-        return {"project": "Project", "address": "", "date": ""}
-    meta = {"project": "", "address": "", "date": ""}
-    m = re.search(r"Before\s*&\s*After\s+([^\n]{3,60})", text, re.IGNORECASE)
-    if m: meta["address"] = m.group(1).strip()
-    m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}", text, re.IGNORECASE)
-    if m: meta["date"] = m.group(0)
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    for i, line in enumerate(lines):
-        if "formo" in line.lower() and i > 0:
-            c = lines[i - 1]
-            if len(c) < 50 and not re.search(r"\d{4}|before|after|renovation", c, re.I):
-                meta["project"] = c; break
-    return meta
+try:
+result = subprocess.run(
+[“pdftotext”, “-layout”, pdf_path, “-”],
+capture_output=True, text=True, check=True
+)
+text = result.stdout
+except Exception:
+return {“project”: “Project”, “address”: “”, “date”: “”}
 
-def img_to_b64(path):
-    with open(path, "rb") as f:
-        return f"data:image/jpeg;base64,{base64.b64encode(f.read()).decode()}"
+```
+meta = {"project": "", "address": "", "date": ""}
+m = re.search(r"Before\s*&\s*After\s+([^\n]{3,60})", text, re.IGNORECASE)
+if m:
+    meta["address"] = m.group(1).strip()
+m = re.search(
+    r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}",
+    text, re.IGNORECASE
+)
+if m:
+    meta["date"] = m.group(0)
+lines = [l.strip() for l in text.splitlines() if l.strip()]
+for i, line in enumerate(lines):
+    if "formo" in line.lower() and i > 0:
+        c = lines[i - 1]
+        if len(c) < 50 and not re.search(r"\d{4}|before|after|renovation", c, re.I):
+            meta["project"] = c
+            break
+return meta
+```
+
+# ── AI captions ────────────────────────────────────────────────────────────────
 
 def ai_describe(img_path, num):
-    if not ANTHROPIC_KEY:
-        return {"section": "General", "title": f"Photo {num}", "description": "", "tags": []}
-    import anthropic, json
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-    with open(img_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-    try:
-        msg = client.messages.create(
-            model="claude-sonnet-4-20250514", max_tokens=180,
-            messages=[{"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                {"type": "text", "text": f"""Before/after renovation photo #{num}. BEFORE=left, AFTER=right.
-Reply ONLY valid JSON:
-{{"section":"<Exterior|Deck|Doors|Flooring|Bathrooms|Kitchen|Paint & Drywall|Windows & Lighting|Trim & Molding|Utilities|General>","title":"<4-6 word English title>","description":"<EXACTLY 2 short English sentences. First: problem before. Second: what was done. Max 18 words each.>","tags":["<tag1>","<tag2>"]}}"""}
-            ]}]
-        )
-        text = msg.content[0].text.strip().replace("```json","").replace("```","").strip()
-        return json.loads(text)
-    except Exception:
-        return {"section": "General", "title": f"Photo {num}", "description": "Renovation work completed.", "tags": []}
+if not ANTHROPIC_KEY:
+return {“section”: “General”, “title”: f”Photo {num}”,
+“description”: “”, “tags”: []}
+import anthropic
+client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+with open(img_path, “rb”) as f:
+b64 = base64.b64encode(f.read()).decode()
+try:
+msg = client.messages.create(
+model=“claude-sonnet-4-20250514”,
+max_tokens=180,
+messages=[{“role”: “user”, “content”: [
+{“type”: “image”,
+“source”: {“type”: “base64”, “media_type”: “image/jpeg”, “data”: b64}},
+{“type”: “text”, “text”:
+f’Before/after renovation photo #{num}. BEFORE=left, AFTER=right.\n’
+f’Reply ONLY valid JSON:\n’
+f’{{“section”:”<Exterior|Deck|Doors|Flooring|Bathrooms|Kitchen|’
+f’Paint & Drywall|Windows & Lighting|Trim & Molding|Utilities|General>”,’
+f’“title”:”<4-6 word English title>”,’
+f’“description”:”<EXACTLY 2 short English sentences. ’
+f’First: problem before. Second: what was done. Max 18 words each.>”,’
+f’“tags”:[”<tag1>”,”<tag2>”]}}’}
+]}]
+)
+text = msg.content[0].text.strip().replace(”`json", "").replace("`”, “”).strip()
+return json.loads(text)
+except Exception:
+return {“section”: “General”, “title”: f”Photo {num}”,
+“description”: “Renovation work completed.”, “tags”: []}
 
-def build_html(meta, photos, include_descriptions):
-    project = meta.get("project", "Project")
-    address = meta.get("address", "")
-    date    = meta.get("date", "")
-    ORDER = ["Exterior","Deck","Doors","Flooring","Bathrooms","Kitchen",
-             "Paint & Drywall","Windows & Lighting","Trim & Molding","Utilities","General"]
-    grouped = {}
-    for p in photos:
-        grouped.setdefault(p.get("section","General"), []).append(p)
-    secs = [s for s in ORDER if s in grouped] + [s for s in grouped if s not in ORDER]
+# ── PDF builder using fpdf2 ────────────────────────────────────────────────────
 
-    cards_html = ""
-    for si, sec in enumerate(secs):
-        rows = ""
-        for p in grouped[sec]:
-            desc_html = f'<p class="cd">{p.get("description","")}</p>' if include_descriptions and p.get("description") else ""
-            tags_html = "".join(f'<span class="tag">{t}</span>' for t in p.get("tags",[]))
-            rows += f'''
-      <div class="card">
-        <div class="ci"><img src="{p["b64"]}"/><span class="badge">#{p["num"]}</span></div>
-        <div class="cb">
-          <h3 class="ct">{p.get("title", f"Photo {p['num']}")}</h3>
-          <div class="ct-line"></div>
-          {desc_html}
-          <div class="ctags">{tags_html}</div>
-          <div class="area-tag">{sec}</div>
-        </div>
-      </div>'''
-        cards_html += f'''
-    <div class="sec">
-      <div class="sl"><span class="sn">{str(si+1).zfill(2)}</span><span class="st">{sec}</span></div>
-      <div class="grid">{rows}</div>
-    </div>'''
+GOLD  = (201, 169, 110)
+BLACK = (25,  24,  22)
+WHITE = (248, 244, 239)
+GRAY  = (197, 188, 176)
+DARK  = (37,  34,  32)
+MUTED = (122, 112, 96)
 
-    cover_b64 = photos[0]["b64"] if photos else ""
-    LOGO = '<svg width="52" height="52" viewBox="0 0 80 80" fill="none"><polygon points="40,5 75,30 75,72 5,72 5,30" stroke="#C9A96E" stroke-width="3" fill="rgba(25,24,22,0.5)" stroke-linejoin="round"/><polyline points="18,30 18,62 62,62 62,30" stroke="#C9A96E" stroke-width="2.5" fill="none" stroke-linejoin="round"/><polyline points="30,62 30,42 50,42" stroke="#C9A96E" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="30" y1="50" x2="46" y2="50" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/></svg>'
+PW, PH = 215.9, 279.4   # Letter in mm
+MARGIN = 14
 
-    img_h = "200px" if include_descriptions else "240px"
+def hex_rgb(h):
+h = h.lstrip(”#”)
+return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@600;700&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap');
-*{{margin:0;padding:0;box-sizing:border-box;-weasy-print-color-adjust:exact;print-color-adjust:exact;}}
-body{{background:#191816;color:#F8F4EF;font-family:'Barlow',sans-serif;font-weight:300;}}
-.cover{{width:100%;height:100vh;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:60px;text-align:center;background:#191816;page-break-after:always;overflow:hidden;}}
-.cover-bg{{position:absolute;inset:0;background-size:cover;background-position:center;filter:brightness(0.28);}}
-.cover-ov{{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(25,24,22,0.1) 0%,rgba(25,24,22,0.7) 50%,#191816 100%);}}
-.cc{{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;}}
-.bn{{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.28em;color:#F8F4EF;margin-top:14px;text-transform:uppercase;}}
-.bs{{font-size:10px;letter-spacing:.4em;color:#C9A96E;text-transform:uppercase;}}
-.dv{{width:1px;height:44px;background:linear-gradient(to bottom,transparent,#C9A96E,transparent);margin:18px auto;}}
-.h1{{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:60px;line-height:1.08;color:#fff;}}
-.h1 em{{font-style:italic;color:#E2C98A;}}
-.adr{{font-size:11px;letter-spacing:.26em;color:#C8BFB0;text-transform:uppercase;margin-top:12px;}}
-.stats{{display:flex;gap:44px;margin-top:36px;justify-content:center;}}
-.sv{{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;color:#E2C98A;display:block;line-height:1;}}
-.sl2{{font-size:9px;letter-spacing:.22em;color:#7A7060;text-transform:uppercase;margin-top:4px;display:block;}}
-.tgl{{margin-top:32px;font-size:10px;letter-spacing:.24em;color:#7A7060;text-transform:uppercase;}}
-.band{{background:#C9A96E;padding:14px 36px;display:flex;align-items:center;justify-content:space-between;}}
-.band p{{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#191816;font-weight:700;}}
-.wrap{{max-width:1080px;margin:0 auto;padding:0 28px;}}
-.sec{{padding-top:48px;}}
-.sl{{display:flex;align-items:center;gap:12px;padding-bottom:18px;border-bottom:1px solid rgba(201,169,110,0.2);}}
-.sn{{font-family:'Cormorant Garamond',serif;font-size:10px;letter-spacing:.3em;color:#C9A96E;}}
-.st{{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#F8F4EF;}}
-.grid{{border:1px solid rgba(201,169,110,0.2);border-top:none;}}
-.card{{display:table;width:100%;background:#252220;border-bottom:1px solid rgba(201,169,110,0.14);page-break-inside:avoid;}}
-.card:last-child{{border-bottom:none;}}
-.ci{{display:table-cell;width:52%;vertical-align:top;position:relative;}}
-.ci img{{width:100%;height:{img_h};object-fit:cover;display:block;}}
-.badge{{position:absolute;top:10px;left:10px;background:rgba(25,24,22,.88);border:1px solid #9A7840;color:#C9A96E;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;padding:2px 8px;}}
-.cb{{display:table-cell;width:48%;padding:20px 22px;vertical-align:middle;border-left:1px solid rgba(201,169,110,0.2);background:#252220;}}
-.ct{{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#F8F4EF;}}
-.ct-line{{display:block;width:24px;height:2px;background:#C9A96E;margin:10px 0;}}
-.cd{{font-size:12px;color:#C8BFB0;line-height:1.7;margin-bottom:8px;}}
-.ctags{{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;}}
-.tag{{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#C9A96E;border:1px solid rgba(201,169,110,.3);padding:2px 7px;}}
-.area-tag{{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#7A7060;margin-top:8px;}}
-.summ{{padding:52px 0 44px;border-top:1px solid rgba(201,169,110,0.2);margin-top:48px;}}
-.smtit{{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:300;color:#C9A96E;text-align:center;margin-bottom:28px;}}
-.kpis{{display:table;width:100%;background:rgba(201,169,110,0.18);border:1px solid rgba(201,169,110,0.2);}}
-.kpi{{display:table-cell;width:33%;padding:22px;text-align:center;background:#252220;border-right:1px solid rgba(201,169,110,0.2);}}
-.kpi:last-child{{border-right:none;}}
-.kv{{font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:300;color:#E2C98A;line-height:1;display:block;}}
-.kl{{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#7A7060;margin-top:5px;display:block;}}
-footer{{background:#252220;border-top:1px solid rgba(201,169,110,0.2);padding:24px 36px;display:table;width:100%;}}
-.ft-l,.ft-r{{display:table-cell;vertical-align:middle;}}
-.ft-r{{text-align:right;}}
-.fb{{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.22em;color:#F8F4EF;}}
-.fb span{{color:#C9A96E;}}
-.fsub{{font-size:9px;letter-spacing:.2em;color:#7A7060;text-transform:uppercase;margin-top:2px;}}
-.fi{{font-size:10px;color:#7A7060;line-height:1.8;}}
-.fi strong{{color:#C8BFB0;display:block;}}
-</style></head><body>
-<div class="cover">
-  <div class="cover-bg" style="background-image:url('{cover_b64}')"></div>
-  <div class="cover-ov"></div>
-  <div class="cc">
-    {LOGO}
-    <div class="bn">FORMO</div><div class="bs">RENOVATION</div>
-    <div class="dv"></div>
-    <h1 class="h1">Before &amp; <em>After</em></h1>
-    <p class="adr">{address} &middot; {project} &middot; {date}</p>
-    <div class="stats">
-      <div><span class="sv">{len(photos)}</span><span class="sl2">Photos</span></div>
-      <div><span class="sv">{len(secs)}</span><span class="sl2">Work Areas</span></div>
-      <div><span class="sv">100%</span><span class="sl2">Before &amp; After</span></div>
-    </div>
-    <div class="tgl">BUILT ON QUALITY &middot; DRIVEN BY INTEGRITY</div>
-  </div>
-</div>
-<div class="band"><p>Full Renovation Report &bull; {address}</p><p>Formo Renovation &bull; {date}</p></div>
-<div class="wrap">
-{cards_html}
-<div class="summ">
-  <h2 class="smtit">Project Summary</h2>
-  <div class="kpis">
-    <div class="kpi"><span class="kv">{len(photos)}</span><span class="kl">Photos Documented</span></div>
-    <div class="kpi"><span class="kv">{len(secs)}</span><span class="kl">Work Areas</span></div>
-    <div class="kpi"><span class="kv">100%</span><span class="kl">Scope Coverage</span></div>
-  </div>
-</div>
-</div>
-<footer>
-  <div class="ft-l"><div class="fb">FORMO <span>RENOVATION</span></div><div class="fsub">Built on Quality &middot; Driven by Integrity</div></div>
-  <div class="ft-r"><div class="fi"><strong>{date}</strong>{project} &mdash; {address}<br>Formo Renovation</div></div>
-</footer>
-</body></html>"""
+def build_pdf(meta, cover_path, photo_imgs, captions, out_path):
+from fpdf import FPDF
+from PIL import Image
 
-@app.route("/")
+```
+project = meta.get("project", "")
+address = meta.get("address", "")
+date    = meta.get("date", "")
+
+pdf = FPDF(orientation="P", unit="mm", format="Letter")
+pdf.set_auto_page_break(False)
+
+# ── COVER PAGE ─────────────────────────────────────────────────────────────
+pdf.add_page()
+
+# Dark background
+pdf.set_fill_color(*BLACK)
+pdf.rect(0, 0, PW, PH, "F")
+
+# Cover photo with dark overlay
+try:
+    img = Image.open(cover_path).convert("RGB")
+    w, h = img.size
+    scale = PW / w
+    ph_img = h * scale
+    # Darken it
+    import numpy as np
+    arr = np.array(img, dtype=np.float32)
+    arr = arr * 0.28
+    arr = np.clip(arr, 0, 255).astype(np.uint8)
+    dark_img = Image.fromarray(arr)
+    tmp_cover = cover_path + "_dark.jpg"
+    dark_img.save(tmp_cover, "JPEG", quality=80)
+    pdf.image(tmp_cover, x=0, y=0, w=PW, h=min(ph_img, PH))
+except Exception:
+    pass
+
+# Gradient overlay (simulate with rects)
+for i in range(20):
+    alpha = int(180 * (i / 19))
+    y_pos = PH * 0.3 + (PH * 0.7) * (i / 19)
+    pdf.set_fill_color(25, 24, 22)
+    pdf.set_alpha(i / 19 * 0.95)
+    pdf.rect(0, y_pos, PW, PH * 0.04, "F")
+pdf.set_alpha(1)
+
+# Bottom solid block
+pdf.set_fill_color(*BLACK)
+pdf.rect(0, PH * 0.65, PW, PH * 0.35, "F")
+
+# Gold line
+pdf.set_draw_color(*GOLD)
+pdf.set_line_width(0.4)
+pdf.line(PW/2 - 20, PH * 0.52, PW/2 + 20, PH * 0.52)
+
+# FORMO
+pdf.set_font("Helvetica", "B", 22)
+pdf.set_text_color(*WHITE)
+pdf.set_xy(0, PH * 0.54)
+pdf.cell(PW, 10, "FORMO", align="C")
+
+# RENOVATION
+pdf.set_font("Helvetica", "", 9)
+pdf.set_text_color(*GOLD)
+pdf.set_xy(0, PH * 0.59)
+pdf.cell(PW, 6, "RENOVATION", align="C")
+
+# Before & After
+pdf.set_font("Helvetica", "B", 36)
+pdf.set_text_color(*WHITE)
+pdf.set_xy(0, PH * 0.64)
+pdf.cell(PW, 16, "Before & After", align="C")
+
+# Address line
+pdf.set_font("Helvetica", "", 10)
+pdf.set_text_color(*GRAY)
+addr_line = f"{address}  ·  {project}  ·  {date}"
+pdf.set_xy(0, PH * 0.73)
+pdf.cell(PW, 7, addr_line, align="C")
+
+# Stats
+stats = [
+    (str(len(photo_imgs)), "PHOTOS"),
+    (str(len(set(c.get("section","General") for c in captions))), "WORK AREAS"),
+    ("100%", "BEFORE & AFTER"),
+]
+col_w = PW / 3
+for i, (val, lbl) in enumerate(stats):
+    x = i * col_w
+    pdf.set_font("Helvetica", "B", 24)
+    pdf.set_text_color(*GOLD)
+    pdf.set_xy(x, PH * 0.80)
+    pdf.cell(col_w, 12, val, align="C")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(*MUTED)
+    pdf.set_xy(x, PH * 0.86)
+    pdf.cell(col_w, 5, lbl, align="C")
+
+# Tagline
+pdf.set_font("Helvetica", "", 8)
+pdf.set_text_color(*MUTED)
+pdf.set_xy(0, PH * 0.91)
+pdf.cell(PW, 6, "BUILT ON QUALITY  ·  DRIVEN BY INTEGRITY", align="C")
+
+# ── GOLD BAND PAGE ──────────────────────────────────────────────────────────
+pdf.add_page()
+pdf.set_fill_color(*BLACK)
+pdf.rect(0, 0, PW, PH, "F")
+
+# Gold band
+pdf.set_fill_color(*GOLD)
+pdf.rect(0, 0, PW, 16, "F")
+pdf.set_font("Helvetica", "B", 8)
+pdf.set_text_color(*BLACK)
+pdf.set_xy(MARGIN, 4)
+pdf.cell(PW/2, 8, f"FULL RENOVATION REPORT  ·  {address.upper()}", align="L")
+pdf.set_xy(PW/2, 4)
+pdf.cell(PW/2 - MARGIN, 8, f"FORMO RENOVATION  ·  {date.upper()}", align="R")
+
+# Group photos by section
+ORDER = ["Exterior","Deck","Doors","Flooring","Bathrooms","Kitchen",
+         "Paint & Drywall","Windows & Lighting","Trim & Molding","Utilities","General"]
+grouped = {}
+for i, cap in enumerate(captions):
+    sec = cap.get("section", "General")
+    grouped.setdefault(sec, []).append((i, cap))
+secs = [s for s in ORDER if s in grouped] + [s for s in grouped if s not in ORDER]
+
+y_cursor = 22
+sec_num = 0
+
+for sec in secs:
+    sec_num += 1
+    items = grouped[sec]
+
+    for idx, (photo_idx, cap) in enumerate(items):
+        img_path = photo_imgs[photo_idx]
+        title = cap.get("title", f"Photo {photo_idx+1}")
+        desc  = cap.get("description", "")
+        tags  = cap.get("tags", [])
+        has_desc = bool(desc)
+        card_h = 62 if has_desc else 52
+
+        # New page if needed
+        if y_cursor + card_h > PH - 20:
+            # Footer on current page
+            _add_footer(pdf, project, address, date)
+            pdf.add_page()
+            pdf.set_fill_color(*BLACK)
+            pdf.rect(0, 0, PW, PH, "F")
+            y_cursor = 14
+
+        # Section header — only for first item in section
+        if idx == 0:
+            if y_cursor + 12 + card_h > PH - 20:
+                _add_footer(pdf, project, address, date)
+                pdf.add_page()
+                pdf.set_fill_color(*BLACK)
+                pdf.rect(0, 0, PW, PH, "F")
+                y_cursor = 14
+
+            # Section number + title
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(*GOLD)
+            pdf.set_xy(MARGIN, y_cursor)
+            pdf.cell(12, 6, f"{sec_num:02d}", align="L")
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_text_color(*WHITE)
+            pdf.set_xy(MARGIN + 12, y_cursor)
+            pdf.cell(PW - MARGIN*2 - 12, 6, sec.upper(), align="L")
+
+            # Gold underline
+            pdf.set_draw_color(*GOLD)
+            pdf.set_line_width(0.3)
+            pdf.line(MARGIN, y_cursor + 7, PW - MARGIN, y_cursor + 7)
+            y_cursor += 11
+
+        # Card background
+        pdf.set_fill_color(*DARK)
+        pdf.rect(MARGIN, y_cursor, PW - MARGIN*2, card_h, "F")
+
+        # Photo (left half)
+        img_w = (PW - MARGIN*2) * 0.52
+        img_x = MARGIN
+        try:
+            pdf.image(img_path, x=img_x, y=y_cursor, w=img_w, h=card_h)
+        except Exception:
+            pass
+
+        # Photo badge
+        pdf.set_fill_color(*BLACK)
+        pdf.set_fill_color(25, 24, 22)
+        pdf.rect(img_x + 2, y_cursor + 2, 14, 5, "F")
+        pdf.set_font("Helvetica", "B", 6)
+        pdf.set_text_color(*GOLD)
+        pdf.set_xy(img_x + 2, y_cursor + 2.5)
+        pdf.cell(14, 4, f"#{photo_idx+1}", align="C")
+
+        # Text area (right half)
+        tx = MARGIN + img_w + 4
+        tw = PW - MARGIN - tx - 2
+        ty = y_cursor + 8
+
+        # Gold line accent
+        pdf.set_draw_color(*GOLD)
+        pdf.set_line_width(0.5)
+        pdf.line(tx, ty - 3, tx + 10, ty - 3)
+
+        # Title
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*WHITE)
+        # Wrap title
+        title_lines = textwrap.wrap(title.upper(), width=28)
+        for tl in title_lines[:2]:
+            pdf.set_xy(tx, ty)
+            pdf.cell(tw, 5, tl, align="L")
+            ty += 5
+
+        ty += 2
+
+        # Description
+        if has_desc:
+            pdf.set_font("Helvetica", "", 7.5)
+            pdf.set_text_color(*GRAY)
+            desc_lines = textwrap.wrap(desc, width=38)
+            for dl in desc_lines[:4]:
+                pdf.set_xy(tx, ty)
+                pdf.cell(tw, 4.2, dl, align="L")
+                ty += 4.2
+            ty += 2
+
+        # Tags
+        tag_x = tx
+        for tag in tags[:2]:
+            tag_text = tag.upper()
+            tag_w = min(len(tag_text) * 1.8 + 4, tw)
+            pdf.set_draw_color(*GOLD)
+            pdf.set_line_width(0.2)
+            pdf.rect(tag_x, ty, tag_w, 5, "D")
+            pdf.set_font("Helvetica", "", 5.5)
+            pdf.set_text_color(*GOLD)
+            pdf.set_xy(tag_x, ty + 0.5)
+            pdf.cell(tag_w, 4, tag_text, align="C")
+            tag_x += tag_w + 2
+
+        # Section label bottom
+        pdf.set_font("Helvetica", "", 6)
+        pdf.set_text_color(*MUTED)
+        pdf.set_xy(tx, y_cursor + card_h - 7)
+        pdf.cell(tw, 5, sec.upper(), align="L")
+
+        # Separator line
+        pdf.set_draw_color(50, 46, 42)
+        pdf.set_line_width(0.2)
+        pdf.line(MARGIN, y_cursor + card_h, PW - MARGIN, y_cursor + card_h)
+
+        y_cursor += card_h + 2
+
+# ── SUMMARY PAGE ───────────────────────────────────────────────────────────
+_add_footer(pdf, project, address, date)
+pdf.add_page()
+pdf.set_fill_color(*BLACK)
+pdf.rect(0, 0, PW, PH, "F")
+
+# Gold band
+pdf.set_fill_color(*GOLD)
+pdf.rect(0, 0, PW, 16, "F")
+pdf.set_font("Helvetica", "B", 8)
+pdf.set_text_color(*BLACK)
+pdf.set_xy(MARGIN, 4)
+pdf.cell(PW - MARGIN*2, 8, "PROJECT SUMMARY", align="C")
+
+# Title
+pdf.set_font("Helvetica", "B", 28)
+pdf.set_text_color(*GOLD)
+pdf.set_xy(0, 36)
+pdf.cell(PW, 14, "Project Summary", align="C")
+
+# KPI boxes
+kpis = [
+    (str(len(photo_imgs)), "Photos Documented"),
+    (str(len(secs)), "Work Areas"),
+    ("100%", "Scope Coverage"),
+]
+box_w = (PW - MARGIN*2 - 8) / 3
+box_x = MARGIN
+box_y = 60
+for val, lbl in kpis:
+    pdf.set_fill_color(*DARK)
+    pdf.rect(box_x, box_y, box_w, 28, "F")
+    pdf.set_draw_color(*GOLD)
+    pdf.set_line_width(0.3)
+    pdf.rect(box_x, box_y, box_w, 28, "D")
+    pdf.set_font("Helvetica", "B", 26)
+    pdf.set_text_color(*GOLD)
+    pdf.set_xy(box_x, box_y + 4)
+    pdf.cell(box_w, 14, val, align="C")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(*MUTED)
+    pdf.set_xy(box_x, box_y + 18)
+    pdf.cell(box_w, 6, lbl.upper(), align="C")
+    box_x += box_w + 4
+
+# Scope table
+ty = 104
+pdf.set_font("Helvetica", "B", 8)
+pdf.set_text_color(*GOLD)
+pdf.set_xy(MARGIN, ty)
+pdf.cell(PW - MARGIN*2, 7, "SCOPE OF WORK", align="L")
+pdf.set_draw_color(*GOLD)
+pdf.set_line_width(0.3)
+pdf.line(MARGIN, ty + 8, PW - MARGIN, ty + 8)
+ty += 12
+
+col1 = 52
+col2 = PW - MARGIN*2 - col1
+for sec in secs:
+    count = len(grouped[sec])
+    pdf.set_fill_color(*DARK)
+    pdf.rect(MARGIN, ty, PW - MARGIN*2, 9, "F")
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_text_color(*GOLD)
+    pdf.set_xy(MARGIN + 2, ty + 1.5)
+    pdf.cell(col1, 6, sec.upper(), align="L")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(*GRAY)
+    pdf.set_xy(MARGIN + col1 + 2, ty + 1.5)
+    pdf.cell(col2 - 4, 6, f"{count} before & after photo{'s' if count>1 else ''}", align="L")
+    pdf.set_draw_color(50, 46, 42)
+    pdf.set_line_width(0.15)
+    pdf.line(MARGIN, ty + 9, PW - MARGIN, ty + 9)
+    ty += 9
+    if ty > PH - 30:
+        break
+
+_add_footer(pdf, project, address, date)
+pdf.output(out_path)
+```
+
+def _add_footer(pdf, project, address, date):
+from fpdf import FPDF
+pdf.set_fill_color(37, 34, 32)
+pdf.rect(0, PH - 14, PW, 14, “F”)
+pdf.set_font(“Helvetica”, “B”, 9)
+pdf.set_text_color(*GOLD)
+pdf.set_xy(MARGIN, PH - 10)
+pdf.cell(60, 6, “FORMO  RENOVATION”, align=“L”)
+pdf.set_font(“Helvetica”, “”, 7)
+pdf.set_text_color(*MUTED)
+pdf.set_xy(PW/2 - 40, PH - 10)
+pdf.cell(80, 6, f”{project}  ·  {address}”, align=“C”)
+pdf.set_xy(PW - MARGIN - 40, PH - 10)
+pdf.cell(40, 6, date, align=“R”)
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+@app.route(”/”)
 def index():
-    return render_template("index.html")
+return render_template(“index.html”)
 
-@app.route("/generate", methods=["POST"])
+@app.route(”/generate”, methods=[“POST”])
 def generate():
-    if "pdf" not in request.files:
-        return jsonify({"error": "No PDF uploaded"}), 400
-    pdf_file = request.files["pdf"]
-    mode = request.form.get("mode", "client")
-    include_descriptions = (mode == "internal") and bool(ANTHROPIC_KEY)
+if “pdf” not in request.files:
+return jsonify({“error”: “No PDF uploaded”}), 400
 
-    with tempfile.TemporaryDirectory() as tmp:
-        pdf_path = os.path.join(tmp, secure_filename(pdf_file.filename or "report.pdf"))
-        pdf_file.save(pdf_path)
-        meta = extract_meta(pdf_path)
-        try:
-            imgs = extract_images(pdf_path, tmp)
-        except Exception as e:
-            return jsonify({"error": f"Could not extract images: {str(e)}"}), 500
-        if len(imgs) < 2:
-            return jsonify({"error": "No photos found. Make sure this is a CompanyCam Before & After report."}), 400
+```
+pdf_file = request.files["pdf"]
+mode = request.form.get("mode", "client")
+include_descriptions = (mode == "internal") and bool(ANTHROPIC_KEY)
 
-        photos = []
-        for i, img_path in enumerate(imgs[1:], 1):
-            p = {"num": i, "b64": img_to_b64(img_path)}
-            if include_descriptions:
-                p.update(ai_describe(img_path, i))
-            else:
-                p.update({"section": "General", "title": f"Photo {i}", "description": "", "tags": []})
-            photos.append(p)
+with tempfile.TemporaryDirectory() as tmp:
+    pdf_path = os.path.join(tmp, secure_filename(pdf_file.filename or "report.pdf"))
+    pdf_file.save(pdf_path)
 
-        html = build_html(meta, photos, include_descriptions)
-        html_path = os.path.join(tmp, "report.html")
-        with open(html_path, "w") as f:
-            f.write(html)
+    meta = extract_meta(pdf_path)
 
-        out_pdf = os.path.join(tmp, "report.pdf")
-        try:
-            from weasyprint import HTML
-            HTML(filename=html_path).write_pdf(out_pdf)
-        except Exception as e:
-            return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
+    try:
+        imgs = extract_images(pdf_path, tmp)
+    except Exception as e:
+        return jsonify({"error": f"Could not extract images: {str(e)}"}), 500
 
-        if not os.path.exists(out_pdf):
-            return jsonify({"error": "PDF generation failed"}), 500
+    if len(imgs) < 2:
+        return jsonify({"error": "No photos found in this PDF."}), 400
 
-        addr = meta.get("address", "Report").replace(" ", "_")
-        suffix = "_Internal" if include_descriptions else "_Client"
-        filename = f"Formo_{addr}{suffix}.pdf"
-        return send_file(out_pdf, mimetype="application/pdf",
-                        as_attachment=True, download_name=filename)
+    cover_img  = imgs[0]
+    photo_imgs = imgs[1:]
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # Build captions
+    captions = []
+    for i, img_path in enumerate(photo_imgs, 1):
+        if include_descriptions:
+            cap = ai_describe(img_path, i)
+        else:
+            cap = {"section": "General", "title": f"Photo {i}",
+                   "description": "", "tags": []}
+        captions.append(cap)
+
+    # Build PDF
+    out_pdf = os.path.join(tmp, "report.pdf")
+    try:
+        build_pdf(meta, cover_img, photo_imgs, captions, out_pdf)
+    except Exception as e:
+        return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
+
+    if not os.path.exists(out_pdf):
+        return jsonify({"error": "PDF was not created"}), 500
+
+    addr = meta.get("address", "Report").replace(" ", "_")
+    suffix = "_Internal" if include_descriptions else "_Client"
+    filename = f"Formo_{addr}{suffix}.pdf"
+
+    return send_file(
+        out_pdf,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=filename
+    )
+```
+
+if **name** == “**main**”:
+port = int(os.environ.get(“PORT”, 5000))
+app.run(host=“0.0.0.0”, port=port, debug=False)
