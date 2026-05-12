@@ -67,7 +67,7 @@ def ai_describe(img_path, num):
     except Exception:
         return {"section": "General", "title": "Photo " + str(num), "description": "Renovation work completed.", "tags": []}
 
-LOGO = '<img src="https://raw.githubusercontent.com/formorenovation-a11y/Formo-report-generatorv1/main/ChatGPT%20Image%2011%20may%202026%2C%2007_21_02%20p.m.png" style="height:120px;margin-bottom:16px;object-fit:contain;" alt="Formo Renovation"/>'
+LOGO = '<img src="https://raw.githubusercontent.com/formorenovation-a11y/Formo-report-generatorv1/main/logo%20new.png" style="height:120px;margin-bottom:16px;object-fit:contain;" alt="Formo Renovation"/>'
 
 def build_html(meta, cover_b64, photos, include_descriptions):
     address = meta.get("address", "")
